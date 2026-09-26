@@ -172,6 +172,50 @@
     box-shadow: 0 5px 15px rgba(74,144,217,0.4);
   }
 
+  /* ============ КНОПКИ ПРОКРУТКИ ▲▼ ============ */
+  .scroll-buttons {
+    position: fixed;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 150;
+  }
+
+  .scroll-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #e94560;
+    color: #e94560;
+    font-size: 1.2em;
+    cursor: pointer;
+    padding: 0;
+    margin: 0;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-transform: none;
+    letter-spacing: normal;
+    font-weight: normal;
+  }
+
+  .scroll-btn:hover {
+    background: #e94560;
+    color: #fff;
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(233, 69, 96, 0.5);
+  }
+
+  .scroll-btn:active {
+    transform: scale(0.95);
+  }
+
   .admin-panel {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
     background: rgba(0,0,0,0.96); z-index: 200; overflow-y: auto;
@@ -244,10 +288,18 @@
     .admin-panel { padding: 15px; }
     #volumeSlider { width: 60px; }
     .volume-control { padding: 4px 8px 4px 4px; }
+    .scroll-buttons { right: 8px; gap: 8px; }
+    .scroll-btn { width: 42px; height: 42px; font-size: 1em; }
   }
 </style>
 </head>
 <body>
+
+<!-- Кнопки прокрутки ▲▼ -->
+<div class="scroll-buttons">
+  <button class="scroll-btn" id="scrollUp" title="Вверх">▲</button>
+  <button class="scroll-btn" id="scrollDown" title="Вниз">▼</button>
+</div>
 
 <div class="music-controls">
   <button class="music-btn" id="adminToggle" title="Редактор контента">⚙️</button>
@@ -498,6 +550,21 @@ volumeSlider.addEventListener('input', (e) => {
   }
 });
 
+/* ============ КНОПКИ ПРОКРУТКИ ============ */
+document.getElementById('scrollUp').addEventListener('click', () => {
+  window.scrollBy({
+    top: -window.innerHeight * 0.7,
+    behavior: 'smooth'
+  });
+});
+
+document.getElementById('scrollDown').addEventListener('click', () => {
+  window.scrollBy({
+    top: window.innerHeight * 0.7,
+    behavior: 'smooth'
+  });
+});
+
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
@@ -508,6 +575,7 @@ function startQuiz() {
   score = 0;
   answered = false;
   showScreen('quizScreen');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   if (!musicPlaying) {
     bgMusic.volume = volumeSlider.value / 100;
     bgMusic.play().then(() => {
@@ -611,6 +679,7 @@ function nextQuestion() {
   currentQuestion++;
   if (currentQuestion < questions.length) {
     loadQuestion();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   } else {
     showFinal();
   }
@@ -635,16 +704,34 @@ function createMediaElement(media) {
     video.onerror = () => { wrap.innerHTML = '<p style="color:#e74c3c">⚠️ Видео не найдено: ' + url + '</p>'; };
     wrap.appendChild(video);
 
+    /* Останавливаем музыку при воспроизведении видео любым способом */
+    video.addEventListener('play', () => {
+      if (!bgMusic.paused) {
+        bgMusic.pause();
+      }
+    });
+
+    /* Возобновляем музыку при паузе видео */
+    video.addEventListener('pause', () => {
+      if (musicPlaying && bgMusic.paused && !video.seeking && video.currentTime < video.duration) {
+        setTimeout(() => {
+          if (video.paused && musicPlaying) {
+            bgMusic.volume = volumeSlider.value / 100;
+            bgMusic.play().catch(() => {});
+          }
+        }, 200);
+      }
+    });
+
     /* Кнопка "Смотреть" */
     const fsBtn = document.createElement('button');
     fsBtn.className = 'media-fullscreen-btn';
     fsBtn.innerHTML = '🎬 Смотреть';
     fsBtn.onclick = () => {
-      /* Приглушаем фоновую музыку */
-      if (musicPlaying) {
-        bgMusic.volume = 0.05;
+      /* Полностью останавливаем фоновую музыку */
+      if (!bgMusic.paused) {
+        bgMusic.pause();
       }
-      /* Разворачиваем на весь экран */
       if (video.requestFullscreen) {
         video.requestFullscreen();
       } else if (video.webkitRequestFullscreen) {
@@ -655,11 +742,12 @@ function createMediaElement(media) {
       video.play().catch(() => {});
     };
 
-    /* Возвращаем громкость при выходе из полноэкранного режима */
     const restoreVolume = () => {
       if (!document.fullscreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {
+        /* Возобновляем фоновую музыку, если она была включена */
         if (musicPlaying) {
           bgMusic.volume = volumeSlider.value / 100;
+          bgMusic.play().catch(() => {});
         }
       }
     };
@@ -682,6 +770,7 @@ function createMediaElement(media) {
 function showFinal() {
   showScreen('finalScreen');
   document.getElementById('progressBar').style.width = '100%';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
   const percent = Math.round((score / questions.length) * 100);
   document.getElementById('finalScore').textContent = `${score} / ${questions.length}`;
 
@@ -714,6 +803,7 @@ function restartQuiz() {
   answered = false;
   showScreen('startScreen');
   document.getElementById('progressBar').style.width = '0%';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 /* ============ АДМИН-ПАНЕЛЬ ============ */
